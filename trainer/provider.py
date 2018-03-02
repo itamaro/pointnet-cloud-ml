@@ -1,20 +1,22 @@
 import os
 import sys
+import tempfile
 import numpy as np
 import h5py
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(BASE_DIR)
+import tensorflow as tf
+# BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# sys.path.append(BASE_DIR)
 
-# Download dataset for point cloud classification
-DATA_DIR = os.path.join(BASE_DIR, 'data')
-if not os.path.exists(DATA_DIR):
-    os.mkdir(DATA_DIR)
-if not os.path.exists(os.path.join(DATA_DIR, 'modelnet40_ply_hdf5_2048')):
-    www = 'https://shapenet.cs.stanford.edu/media/modelnet40_ply_hdf5_2048.zip'
-    zipfile = os.path.basename(www)
-    os.system('wget %s; unzip %s' % (www, zipfile))
-    os.system('mv %s %s' % (zipfile[:-4], DATA_DIR))
-    os.system('rm %s' % (zipfile))
+# # Download dataset for point cloud classification
+# DATA_DIR = os.path.join(BASE_DIR, 'data')
+# if not os.path.exists(DATA_DIR):
+#     os.mkdir(DATA_DIR)
+# if not os.path.exists(os.path.join(DATA_DIR, 'modelnet40_ply_hdf5_2048')):
+#     www = 'https://shapenet.cs.stanford.edu/media/modelnet40_ply_hdf5_2048.zip'
+#     zipfile = os.path.basename(www)
+#     os.system('wget %s; unzip %s' % (www, zipfile))
+#     os.system('mv %s %s' % (zipfile[:-4], DATA_DIR))
+#     os.system('rm %s' % (zipfile))
 
 
 def shuffle_data(data, labels):
@@ -93,8 +95,20 @@ def load_h5(h5_filename):
     label = f['label'][:]
     return (data, label)
 
-def loadDataFile(filename):
-    return load_h5(filename)
+def getLocallyCached(sess, filename):
+    print('load data from', filename)
+    if filename.startswith('gs://'):
+        localfname = os.path.join(tempfile.tempdir, os.path.basename(filename))
+        if not os.path.isfile(localfname):
+            print('caching {} locally as {}'.format(filename, localfname))
+            with open(localfname, 'wb') as localf:
+                localf.write(sess.run(tf.read_file(filename)))
+        print('using locally cached', localfname)
+        return localfname
+    return filename
+
+def loadDataFile(sess, filename):
+    return load_h5(getLocallyCached(sess, filename))
 
 def load_h5_data_label_seg(h5_filename):
     f = h5py.File(h5_filename)
@@ -104,5 +118,5 @@ def load_h5_data_label_seg(h5_filename):
     return (data, label, seg)
 
 
-def loadDataFile_with_seg(filename):
-    return load_h5_data_label_seg(filename)
+def loadDataFile_with_seg(sess, filename):
+    return load_h5_data_label_seg(getLocallyCached(sess, filename))
